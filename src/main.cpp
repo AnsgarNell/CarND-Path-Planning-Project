@@ -250,6 +250,7 @@ int main() {
 			}
 			
 			bool too_close = false;
+			double min_distance = 30.0;
 			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
@@ -265,18 +266,25 @@ int main() {
 					
 					check_car_s += ((double) prev_size * .02 * check_speed);
 					
+					double distance = check_car_s - car_s;
+					
 					// Check s values greater than mine and s_gap
-					if((check_car_s > car_s) && (check_car_s - car_s < 30))
+					if((check_car_s > car_s) && (distance < 30))
 					{
-						//ref_vel = 29.5;
 						too_close = true;
-					}
+						if (distance < min_distance) min_distance = distance;
+						if(current_lane > 0)
+						{
+							current_lane = 0;
+						}
+					}					
 				}
 			}
 			
 			if(too_close)
 			{
-				ref_vel -= .224;
+				//ref_vel -= .224;
+				ref_vel -= 5.0 / min_distance;
 			}
 			else if(ref_vel < 49.5)
 			{
