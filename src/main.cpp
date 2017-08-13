@@ -273,7 +273,7 @@ int main() {
 						check_car_s += ((double) prev_size * .02 * check_speed);
 						
 						// Check s values greater than mine and s_gap
-						if((check_car_s > car_s) && (check_car_s - car_s < 50))
+						if((check_car_s > (car_s - 5)) && (check_car_s - car_s < 50))
 						{
 							ref_speed = check_speed * 2.0;
 							if(lane_costs[j] < ref_speed) lane_costs[j] = (50/ref_speed) - 1;
