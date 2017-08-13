@@ -253,11 +253,34 @@ int main() {
 			double min_distance = 30.0;
 			double ref_speed = 0.0;
 			
+			double lane_costs[3] = {0};
+			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
 			{
-				// Car is in my lane
 				float d = sensor_fusion[i][6];
+				
+				// Calculate the cost of each lane
+				for(int j = 0; j < sizeof(lane_costs); j++)
+				{
+					if((d < lane_distances[j] + 2) && (d > lane_distances[j] - 2))
+					{
+						double vx = sensor_fusion[i][3];
+						double vy = sensor_fusion[i][4];
+						double check_speed = sqrt(vx*vx + vy*vy);
+						double check_car_s = sensor_fusion[i][5];
+						
+						check_car_s += ((double) prev_size * .02 * check_speed);
+						
+						// Check s values greater than mine and s_gap
+						if((check_car_s > car_s) && (check_car_s - car_s < 50))
+						{
+							ref_speed = check_speed * 2.0;
+							if(lane_costs[j] < ref_speed) lane_costs[j] = (50/ref_speed) - 1;
+						}	
+					}
+				}
+				
 				if((d < lane_distances[current_lane] + 2) && (d > lane_distances[current_lane] - 2))
 				{
 					double vx = sensor_fusion[i][3];
@@ -277,11 +300,7 @@ int main() {
 						{
 							min_distance = distance;
 							ref_speed = check_speed * 2.0;
-						}
-						if(current_lane > 0)
-						{
-							current_lane = 0;
-						}
+						}					
 					}					
 				}
 			}
@@ -291,13 +310,35 @@ int main() {
 				if(ref_speed < car_speed)
 				{
 					ref_vel -= 5.0 / min_distance;
-					std::cout << "Car speed: " << car_speed << " Other car speed: " << ref_speed << std::endl;
 				}
 			}
 			else if(ref_vel < 49.5)
 			{
 				ref_vel += .224;
+			}						
+			
+			// We update each lane costs in order to reflect an extra cost for changing the lane
+			switch(current_lane)
+			{
+				case 0:
+					lane_costs[1] += 0.1;
+					lane_costs[2] += 0.2;
+					if((lane_costs[1] < lane_costs[0]) || (lane_costs[2] < lane_costs[0])) current_lane = 1;
+					break;
+				case 2:
+					lane_costs[1] += 0.1;
+					lane_costs[0] += 0.2;
+					if((lane_costs[1] < lane_costs[2]) || (lane_costs[0] < lane_costs[2])) current_lane = 1;
+					break;
+				case 1:
+					lane_costs[0] += 0.1;
+					lane_costs[2] += 0.1;
+					if(lane_costs[0] < lane_costs[1]) current_lane = 0;
+					else if(lane_costs[2] < lane_costs[1]) current_lane = 2;					
+					break;
 			}
+			
+			std::cout << "Lane costs 0: " << std::fixed << std::setprecision(3) << lane_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << lane_costs[1] << "\t 2: " << std::fixed << std::setprecision(3) << lane_costs[2] << std::endl;
 			
 			// create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
 			// Later we will interpolate these waypoints with a spline and fill it in with more points that control speed
