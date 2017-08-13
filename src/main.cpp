@@ -251,6 +251,7 @@ int main() {
 			
 			bool too_close = false;
 			double min_distance = 30.0;
+			double ref_speed = 0.0;
 			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
@@ -269,10 +270,14 @@ int main() {
 					double distance = check_car_s - car_s;
 					
 					// Check s values greater than mine and s_gap
-					if((check_car_s > car_s) && (distance < 30))
+					if((check_car_s > car_s) && (distance < 20))
 					{
 						too_close = true;
-						if (distance < min_distance) min_distance = distance;
+						if (distance < min_distance)
+						{
+							min_distance = distance;
+							ref_speed = check_speed * 2.0;
+						}
 						if(current_lane > 0)
 						{
 							current_lane = 0;
@@ -283,8 +288,11 @@ int main() {
 			
 			if(too_close)
 			{
-				//ref_vel -= .224;
-				ref_vel -= 5.0 / min_distance;
+				if(ref_speed < car_speed)
+				{
+					ref_vel -= 5.0 / min_distance;
+					std::cout << "Car speed: " << car_speed << " Other car speed: " << ref_speed << std::endl;
+				}
 			}
 			else if(ref_vel < 49.5)
 			{
