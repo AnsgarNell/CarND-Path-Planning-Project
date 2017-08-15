@@ -431,7 +431,7 @@ int main() {
 				
 				double current_distance = first_check_car_s - first_car_s;
 
-				if((abs(current_distance) < 10) || (abs(distance) < 10)) 
+				if((abs(current_distance) < 5) || (abs(distance) < 20)) 
 				{
 					// Update lane changing cost	
 					if(lane == (current_lane-1))
@@ -509,7 +509,20 @@ int main() {
 			
 			state = next_state;
 			
-			std::cout << "Change costs 0: " << std::fixed << std::setprecision(3) << change_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << change_costs[1] << std::endl;
+			double debug_costs[3] = {0};
+			debug_costs[0] = lane_costs[0];
+			debug_costs[1] = lane_costs[1];
+			debug_costs[2] = lane_costs[2];
+			
+			if (current_lane == 0) debug_costs[1] += change_costs[1];
+			else if(current_lane == 1)
+			{
+				debug_costs[0] += change_costs[0];
+				debug_costs[2] += change_costs[1];
+			}
+			else if(current_lane == 2) debug_costs[1] += change_costs[0];
+			
+			std::cout << "Change costs 0: " << std::fixed << std::setprecision(3) << debug_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << debug_costs[1] << "\t 2: " << std::fixed << std::setprecision(3) << debug_costs[2] << std::endl;
 			
 			// create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
 			// Later we will interpolate these waypoints with a spline and fill it in with more points that control speed
