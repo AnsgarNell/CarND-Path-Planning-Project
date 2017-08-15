@@ -16,11 +16,11 @@ A FSM has been defined with the following states:
 
 
 
-1. keep_lane
-2. prepare_change_left
-3. prepare_change_right
-4. change_left
-5. change_right
+1. `keep_lane`
+2. `prepare_change_left`
+3. `prepare_change_right`
+4. `change_left`
+5. `change_right`
 
 This FSM corresponds with the one used in Lesson 4 lecture 8, as it can be seen int he next figure:
 
