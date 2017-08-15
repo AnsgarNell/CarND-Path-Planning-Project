@@ -410,7 +410,7 @@ int main() {
 				double distance = check_car_s - car_s;
 				double current_distance = first_check_car_s - first_car_s;
 				
-				if(abs(current_distance) < 5)
+				if(abs(current_distance) < (car_speed/5.0))
 				{
 					// Update lane changing cost	
 					if(lane == (current_lane-1))
@@ -424,7 +424,7 @@ int main() {
 				}
 				
 				// Check s values greater than mine and s_gap, to control behaviour when our car follows another one
-				if(abs(distance < 40))
+				if(abs(distance) < car_speed)
 				{
 					if(distance > 0)
 					{					
@@ -436,14 +436,14 @@ int main() {
 						if(lane == current_lane)
 						{	
 							// Check s values greater than mine and s_gap
-							if(distance < 30)
+							if(distance < (car_speed/2.0))
 							{
 								too_close = true;
 								if (distance < min_distance) min_distance = distance;
 							}	
 							else keep_behind = true;
 						}	
-						else if((ref_speed < car_speed) && (abs(distance) < 20))
+						else if((ref_speed < car_speed) && (abs(distance) < (car_speed/2.0)))
 						{
 							// Update lane changing cost	
 							if(lane == (current_lane-1))
@@ -456,7 +456,7 @@ int main() {
 							}
 						}						
 					}		
-					else if((ref_speed > car_speed) && (abs(distance) < 20))
+					else if((ref_speed > car_speed) && (abs(distance) < (car_speed/2.0)))
 					{
 						// Update lane changing cost	
 						if(lane == (current_lane-1))
@@ -479,7 +479,7 @@ int main() {
 				}
 			}
 			else if (keep_behind) ref_vel = ref_vel;
-			else if(ref_vel < 49.0)
+			else if(ref_vel < 49.5)
 			{
 				ref_vel += .400;
 			}						
