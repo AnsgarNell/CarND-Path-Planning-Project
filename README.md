@@ -1,5 +1,5 @@
 [//]: # (Image References)
-[image1]: ../img/FSM.png
+[image1]: ./img/FSM.png
 
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
