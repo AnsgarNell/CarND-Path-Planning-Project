@@ -162,6 +162,100 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 enum States { keep_lane, prepare_change_left, prepare_change_right, change_left, change_right };
 
+vector<States> successor_states(States current_fsm_state, int current_lane)
+{
+	vector<States> result;
+	
+	switch(current_fsm_state)
+	{
+		case keep_lane:
+			result.push_back(keep_lane);
+			if (current_lane > 0) result.push_back(prepare_change_left);
+			if (current_lane < 2) result.push_back(prepare_change_right);
+			break;
+		case prepare_change_left:
+			result.push_back(keep_lane);
+			if (current_lane > 0) result.push_back(prepare_change_left);
+			result.push_back(change_left);
+			break;
+		case prepare_change_right:
+			result.push_back(keep_lane);
+			if (current_lane < 2) result.push_back(prepare_change_right);
+			result.push_back(change_right);
+			break;
+		case change_left:
+			result.push_back(keep_lane);
+			result.push_back(change_left);
+			break;
+		case change_right:
+			result.push_back(keep_lane);
+			result.push_back(change_right);
+			break;
+	}
+	
+	return result;
+}
+
+double cost_function(double lane_costs[], States possible_successor_state, int current_lane)
+{
+	double result;
+	
+	// We update each lane costs in order to reflect an extra cost for changing the lane
+	switch(possible_successor_state)
+	{
+		case keep_lane:
+			result = lane_costs[current_lane];
+			break;
+		case prepare_change_left:
+			result = lane_costs[current_lane-1];
+			if((current_lane == 2) && (lane_costs[0] < lane_costs[1])) result = lane_costs[0];
+			break;
+		case prepare_change_right:
+			result = lane_costs[current_lane+1];
+			if((current_lane == 0) && (lane_costs[2] < lane_costs[1])) result = lane_costs[2];
+			break;
+		case change_left:
+			result = lane_costs[current_lane-1] - 0.05;
+			if((current_lane == 2) && (lane_costs[0] < lane_costs[1])) result = lane_costs[0] - 0.05;
+			break;
+		case change_right:
+			result = lane_costs[current_lane+1] - 0.05;
+			if((current_lane == 0) && (lane_costs[2] < lane_costs[1])) result = lane_costs[2] - 0.05;
+			break;
+	}
+	
+	return result;
+}
+
+States transition_function(double lane_costs[], States current_fsm_state, int current_lane)
+{
+    // only consider states which can be reached from current FSM state.
+    vector<States> possible_successor_states = successor_states(current_fsm_state, current_lane);
+	
+	vector<double> costs;
+
+	for(int i = 0; i < possible_successor_states.size(); i++)
+	{
+		double cost_for_cost_function = cost_function(lane_costs, possible_successor_states[i], current_lane);
+		costs.push_back(cost_for_cost_function);		
+	}
+
+    // Find the minimum cost state.
+    States best_next_state;
+    double min_cost = 9999999.9;
+	for(int i = 0; i < possible_successor_states.size(); i++)
+	{
+        States state = possible_successor_states[i];
+        double cost  = costs[i];
+        if (cost < min_cost)
+		{
+            min_cost = cost;
+            best_next_state = state;
+		}
+	}
+    return best_next_state;
+}
+
 int main() {
   uWS::Hub h;
   
@@ -257,9 +351,7 @@ int main() {
 			double min_distance = 30.0;
 			double ref_speed = 0.0;
 			
-			double lane_costs[3] = {0};
-			
-			States next_state = keep_lane;
+			double lane_costs[3] = {0};			
 			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
@@ -328,42 +420,67 @@ int main() {
 			{
 				case 0:
 					lane_costs[1] += 0.1;
-					lane_costs[2] += 0.2;
-					if((lane_costs[1] < lane_costs[0]) || (lane_costs[2] < lane_costs[0]))
-					{
-						current_lane = 1;
-						next_state = prepare_change_right;					
-					}
-					else next_state = keep_lane;
+					lane_costs[2] += 0.2;					
 					break;
 				case 2:
 					lane_costs[1] += 0.1;
-					lane_costs[0] += 0.2;
-					if((lane_costs[1] < lane_costs[2]) || (lane_costs[0] < lane_costs[2])) 
-					{
-						current_lane = 1;
-						next_state = prepare_change_left;					
-					}
-					else next_state = keep_lane;
+					lane_costs[0] += 0.2;					
 					break;
 				case 1:
 					lane_costs[0] += 0.1;
-					lane_costs[2] += 0.1;
-					if(lane_costs[0] < lane_costs[1])
-					{
-						current_lane = 0;
-						next_state = prepare_change_left;					
-					}
-					else if(lane_costs[2] < lane_costs[1])
-					{
-						current_lane = 2;
-						next_state = prepare_change_right;					
-					}
-					else next_state = keep_lane;
+					lane_costs[2] += 0.1;					
 					break;
 			}
 			
-			std::cout << "Lane costs 0: " << std::fixed << std::setprecision(3) << lane_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << lane_costs[1] << "\t 2: " << std::fixed << std::setprecision(3) << lane_costs[2] << std::endl;
+			// Decide which is the best next state
+			States next_state = transition_function(lane_costs, state, current_lane);
+			
+			if(state != next_state)
+			{
+				
+				switch(next_state)
+				{
+					case keep_lane:
+						std::cout << "Next state: keep_lane" << std::endl;
+						break;
+					case prepare_change_left:
+						std::cout << "Next state: prepare_change_left" << std::endl;
+						break;
+					case prepare_change_right:
+						std::cout << "Next state: prepare_change_right" << std::endl;
+						break;
+					case change_left:
+						std::cout << "Next state: change_left" << std::endl;
+						break;
+					case change_right:
+						std::cout << "Next state: change_right" << std::endl;
+						break;
+				}
+			}
+			
+			switch(next_state)
+			{
+				case change_left:
+					if (state == prepare_change_left) 
+					{
+						current_lane -= 1;
+						next_state = keep_lane;
+					}
+					std::cout << "Next state: keep_lane" << std::endl;
+					break;
+				case change_right:
+					if (state == prepare_change_right) 
+					{
+						current_lane += 1;
+						next_state = keep_lane;
+					}
+					std::cout << "Next state: keep_lane" << std::endl;
+					break;
+			}
+			
+			state = next_state;
+			
+			//std::cout << "Lane costs 0: " << std::fixed << std::setprecision(3) << lane_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << lane_costs[1] << "\t 2: " << std::fixed << std::setprecision(3) << lane_costs[2] << std::endl;
 			
 			// create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
 			// Later we will interpolate these waypoints with a spline and fill it in with more points that control speed
