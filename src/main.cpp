@@ -408,30 +408,9 @@ int main() {
 				check_car_s += ((double) prev_size * .02 * check_speed);												
 				
 				double distance = check_car_s - car_s;
-				
-				// Check s values greater than mine and s_gap, to control behaviour when our car follows another one
-				if((distance > 0) && (distance < 50))
-				{					
-					// Here we store the other vehicles velocity in mph
-					ref_speed = check_speed / 0.44704;
-			
-					if(lane_costs[lane] < ref_speed) lane_costs[lane] = (50/ref_speed) - 1;					
-					
-					if(lane == current_lane)
-					{	
-						// Check s values greater than mine and s_gap
-						if(distance < 30)
-						{
-							too_close = true;
-							if (distance < min_distance) min_distance = distance;
-						}	
-						else keep_behind = true;
-					}
-				}	
-				
 				double current_distance = first_check_car_s - first_car_s;
-
-				if((abs(current_distance) < 5) || (abs(distance) < 20)) 
+				
+				if(abs(current_distance) < 5)
 				{
 					// Update lane changing cost	
 					if(lane == (current_lane-1))
@@ -441,6 +420,53 @@ int main() {
 					else if (lane == (current_lane+1))
 					{
 						change_costs[1] = 999.0;
+					}
+				}
+				
+				// Check s values greater than mine and s_gap, to control behaviour when our car follows another one
+				if(abs(distance < 40))
+				{
+					if(distance > 0)
+					{					
+						// Here we store the other vehicles velocity in mph
+						ref_speed = check_speed / 0.44704;
+				
+						if(lane_costs[lane] < ref_speed) lane_costs[lane] = (50/ref_speed) - 1;					
+						
+						if(lane == current_lane)
+						{	
+							// Check s values greater than mine and s_gap
+							if(distance < 30)
+							{
+								too_close = true;
+								if (distance < min_distance) min_distance = distance;
+							}	
+							else keep_behind = true;
+						}	
+						else if((ref_speed < car_speed) && (abs(distance) < 20))
+						{
+							// Update lane changing cost	
+							if(lane == (current_lane-1))
+							{					
+								change_costs[0] = 999.0;
+							}
+							else if (lane == (current_lane+1))
+							{
+								change_costs[1] = 999.0;
+							}
+						}						
+					}		
+					else if((ref_speed > car_speed) && (abs(distance) < 20))
+					{
+						// Update lane changing cost	
+						if(lane == (current_lane-1))
+						{					
+							change_costs[0] = 999.0;
+						}
+						else if (lane == (current_lane+1))
+						{
+							change_costs[1] = 999.0;
+						}
 					}
 				}
 			}
