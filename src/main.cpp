@@ -196,7 +196,7 @@ vector<States> successor_states(States current_fsm_state, int current_lane)
 	return result;
 }
 
-double cost_function(double lane_costs[], States possible_successor_state, int current_lane)
+double cost_function(double lane_costs[], double change_costs[], States possible_successor_state, int current_lane)
 {
 	double result;
 	
@@ -215,19 +215,17 @@ double cost_function(double lane_costs[], States possible_successor_state, int c
 			if((current_lane == 0) && (lane_costs[2] < lane_costs[1])) result = lane_costs[2];
 			break;
 		case change_left:
-			result = lane_costs[current_lane-1] - 0.05;
-			if((current_lane == 2) && (lane_costs[0] < lane_costs[1])) result = lane_costs[0] - 0.05;
+			result = change_costs[0];
 			break;
 		case change_right:
-			result = lane_costs[current_lane+1] - 0.05;
-			if((current_lane == 0) && (lane_costs[2] < lane_costs[1])) result = lane_costs[2] - 0.05;
+			result = change_costs[1];
 			break;
 	}
 	
 	return result;
 }
 
-States transition_function(double lane_costs[], States current_fsm_state, int current_lane)
+States transition_function(double lane_costs[], double change_costs[], States current_fsm_state, int current_lane)
 {
     // only consider states which can be reached from current FSM state.
     vector<States> possible_successor_states = successor_states(current_fsm_state, current_lane);
@@ -236,7 +234,7 @@ States transition_function(double lane_costs[], States current_fsm_state, int cu
 
 	for(int i = 0; i < possible_successor_states.size(); i++)
 	{
-		double cost_for_cost_function = cost_function(lane_costs, possible_successor_states[i], current_lane);
+		double cost_for_cost_function = cost_function(lane_costs, change_costs, possible_successor_states[i], current_lane);
 		costs.push_back(cost_for_cost_function);		
 	}
 
@@ -253,6 +251,31 @@ States transition_function(double lane_costs[], States current_fsm_state, int cu
             best_next_state = state;
 		}
 	}
+	
+	/*
+	if(current_fsm_state != best_next_state)
+	{	
+		switch(best_next_state)
+		{
+			case keep_lane:
+				std::cout << "Next state: keep_lane Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
+				break;
+			case prepare_change_left:
+				std::cout << "Next state: prepare_change_left Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
+				break;
+			case prepare_change_right:
+				std::cout << "Next state: prepare_change_right Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
+				break;
+			case change_left:
+				std::cout << "Next state: change_left Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
+				break;
+			case change_right:
+				std::cout << "Next state: change_right Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
+				break;
+		}
+	}
+	*/
+	
     return best_next_state;
 }
 
@@ -268,6 +291,7 @@ int main() {
   double ref_vel = 0.0;
   
   States state = keep_lane;
+  bool lane_changing = false;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
   vector<double> map_waypoints_x;
@@ -303,7 +327,7 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane_distances, &current_lane, &ref_vel, &state](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane_distances, &current_lane, &ref_vel, &state, &lane_changing](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -342,23 +366,28 @@ int main() {
 			
 			int prev_size = previous_path_x.size();
 			
+			double first_car_s = car_s;
+			
 			if(prev_size > 0)
 			{
 				car_s = end_path_s;
 			}
 			
 			bool too_close = false;
+			bool keep_behind = false;
 			double min_distance = 30.0;
+			
+			// Value to store the velocity of a car in front of us and near
 			double ref_speed = 0.0;
 			
-			double lane_costs[3] = {0};			
+			double lane_costs[3] = {0};		
+			double change_costs[2] = {0};
 			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
 			{
 				float d = sensor_fusion[i][6];
 				int lane = 0;
-				bool same_lane = false;
 				
 				for(int j = 0; j < sizeof(lane_costs); j++)
 				{
@@ -367,39 +396,52 @@ int main() {
 						lane = j;
 						break;
 					}
-				}
-				
-				if(lane == current_lane) same_lane = true;
+				}				
 				
 				// Update the cost for the detected car's lane
 				double vx = sensor_fusion[i][3];
 				double vy = sensor_fusion[i][4];
 				double check_speed = sqrt(vx*vx + vy*vy);
-				double check_car_s = sensor_fusion[i][5];
+				double check_car_s = sensor_fusion[i][5];			
+				double first_check_car_s = check_car_s;
+							
+				check_car_s += ((double) prev_size * .02 * check_speed);												
 				
-				check_car_s += ((double) prev_size * .02 * check_speed);
+				double distance = check_car_s - car_s;
 				
-				// Check s values greater than mine and s_gap
-				if((check_car_s > (car_s - 5)) && (check_car_s - car_s < 50))
-				{
-					ref_speed = check_speed * 2.0;
-					if(lane_costs[lane] < ref_speed) lane_costs[lane] = (50/ref_speed) - 1;
+				// Check s values greater than mine and s_gap, to control behaviour when our car follows another one
+				if((distance > 0) && (distance < 50))
+				{					
+					// Here we store the other vehicles velocity in mph
+					ref_speed = check_speed / 0.44704;
+			
+					if(lane_costs[lane] < ref_speed) lane_costs[lane] = (50/ref_speed) - 1;					
+					
+					if(lane == current_lane)
+					{	
+						// Check s values greater than mine and s_gap
+						if(distance < 30)
+						{
+							too_close = true;
+							if (distance < min_distance) min_distance = distance;
+						}	
+						else keep_behind = true;
+					}
 				}	
 				
-				if(same_lane)
+				double current_distance = first_check_car_s - first_car_s;
+
+				if((abs(current_distance) < 10) || (abs(distance) < 10)) 
 				{
-					double distance = check_car_s - car_s;
-					
-					// Check s values greater than mine and s_gap
-					if((check_car_s > car_s) && (distance < 20))
+					// Update lane changing cost	
+					if(lane == (current_lane-1))
+					{					
+						change_costs[0] = 999.0;
+					}
+					else if (lane == (current_lane+1))
 					{
-						too_close = true;
-						if (distance < min_distance)
-						{
-							min_distance = distance;
-							ref_speed = check_speed * 2.0;
-						}					
-					}					
+						change_costs[1] = 999.0;
+					}
 				}
 			}
 			
@@ -410,7 +452,8 @@ int main() {
 					ref_vel -= 5.0 / min_distance;
 				}
 			}
-			else if(ref_vel < 49.5)
+			else if (keep_behind) ref_vel = ref_vel;
+			else if(ref_vel < 49.0)
 			{
 				ref_vel += .400;
 			}						
@@ -433,54 +476,40 @@ int main() {
 			}
 			
 			// Decide which is the best next state
-			States next_state = transition_function(lane_costs, state, current_lane);
+			States next_state = transition_function(lane_costs, change_costs, state, current_lane);
 			
-			if(state != next_state)
+			if(lane_changing)
 			{
-				
-				switch(next_state)
+				if((car_d < lane_distances[current_lane] + 0.5) && (car_d > lane_distances[current_lane] - 0.5)) 
 				{
-					case keep_lane:
-						std::cout << "Next state: keep_lane" << std::endl;
-						break;
-					case prepare_change_left:
-						std::cout << "Next state: prepare_change_left" << std::endl;
-						break;
-					case prepare_change_right:
-						std::cout << "Next state: prepare_change_right" << std::endl;
-						break;
-					case change_left:
-						std::cout << "Next state: change_left" << std::endl;
-						break;
-					case change_right:
-						std::cout << "Next state: change_right" << std::endl;
-						break;
+					lane_changing = false;
+					next_state = keep_lane;
 				}
+				else
+					next_state = state;
 			}
-			
+				
 			switch(next_state)
 			{
 				case change_left:
 					if (state == prepare_change_left) 
 					{
 						current_lane -= 1;
-						next_state = keep_lane;
+						lane_changing = true;
 					}
-					std::cout << "Next state: keep_lane" << std::endl;
 					break;
 				case change_right:
 					if (state == prepare_change_right) 
 					{
 						current_lane += 1;
-						next_state = keep_lane;
+						lane_changing = true;
 					}
-					std::cout << "Next state: keep_lane" << std::endl;
 					break;
 			}
 			
 			state = next_state;
 			
-			//std::cout << "Lane costs 0: " << std::fixed << std::setprecision(3) << lane_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << lane_costs[1] << "\t 2: " << std::fixed << std::setprecision(3) << lane_costs[2] << std::endl;
+			std::cout << "Change costs 0: " << std::fixed << std::setprecision(3) << change_costs[0] << "\t 1: " << std::fixed << std::setprecision(3) << change_costs[1] << std::endl;
 			
 			// create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
 			// Later we will interpolate these waypoints with a spline and fill it in with more points that control speed
