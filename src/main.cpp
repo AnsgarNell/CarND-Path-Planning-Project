@@ -252,30 +252,6 @@ States transition_function(double lane_costs[], double change_costs[], States cu
 		}
 	}
 	
-	/*
-	if(current_fsm_state != best_next_state)
-	{	
-		switch(best_next_state)
-		{
-			case keep_lane:
-				std::cout << "Next state: keep_lane Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
-				break;
-			case prepare_change_left:
-				std::cout << "Next state: prepare_change_left Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
-				break;
-			case prepare_change_right:
-				std::cout << "Next state: prepare_change_right Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
-				break;
-			case change_left:
-				std::cout << "Next state: change_left Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
-				break;
-			case change_right:
-				std::cout << "Next state: change_right Cost: " << std::fixed << std::setprecision(3) << min_cost << std::endl;
-				break;
-		}
-	}
-	*/
-	
     return best_next_state;
 }
 
