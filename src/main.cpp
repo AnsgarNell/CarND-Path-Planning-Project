@@ -160,6 +160,8 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+enum States { keep_lane, prepare_change_left, prepare_change_right, change_left, change_right };
+
 int main() {
   uWS::Hub h;
   
@@ -170,6 +172,8 @@ int main() {
   
   // Have a reference velocity to target
   double ref_vel = 0.0;
+  
+  States state = keep_lane;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
   vector<double> map_waypoints_x;
@@ -205,7 +209,7 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane_distances, &current_lane, &ref_vel](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane_distances, &current_lane, &ref_vel, &state](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -255,41 +259,43 @@ int main() {
 			
 			double lane_costs[3] = {0};
 			
+			States next_state = keep_lane;
+			
 			// find ref_v to use
 			for(int i = 0; i < sensor_fusion.size(); i++)
 			{
 				float d = sensor_fusion[i][6];
+				int lane = 0;
+				bool same_lane = false;
 				
-				// Calculate the cost of each lane
 				for(int j = 0; j < sizeof(lane_costs); j++)
 				{
 					if((d < lane_distances[j] + 2) && (d > lane_distances[j] - 2))
 					{
-						double vx = sensor_fusion[i][3];
-						double vy = sensor_fusion[i][4];
-						double check_speed = sqrt(vx*vx + vy*vy);
-						double check_car_s = sensor_fusion[i][5];
-						
-						check_car_s += ((double) prev_size * .02 * check_speed);
-						
-						// Check s values greater than mine and s_gap
-						if((check_car_s > (car_s - 5)) && (check_car_s - car_s < 50))
-						{
-							ref_speed = check_speed * 2.0;
-							if(lane_costs[j] < ref_speed) lane_costs[j] = (50/ref_speed) - 1;
-						}	
+						lane = j;
+						break;
 					}
 				}
 				
-				if((d < lane_distances[current_lane] + 2) && (d > lane_distances[current_lane] - 2))
+				if(lane == current_lane) same_lane = true;
+				
+				// Update the cost for the detected car's lane
+				double vx = sensor_fusion[i][3];
+				double vy = sensor_fusion[i][4];
+				double check_speed = sqrt(vx*vx + vy*vy);
+				double check_car_s = sensor_fusion[i][5];
+				
+				check_car_s += ((double) prev_size * .02 * check_speed);
+				
+				// Check s values greater than mine and s_gap
+				if((check_car_s > (car_s - 5)) && (check_car_s - car_s < 50))
 				{
-					double vx = sensor_fusion[i][3];
-					double vy = sensor_fusion[i][4];
-					double check_speed = sqrt(vx*vx + vy*vy);
-					double check_car_s = sensor_fusion[i][5];
-					
-					check_car_s += ((double) prev_size * .02 * check_speed);
-					
+					ref_speed = check_speed * 2.0;
+					if(lane_costs[lane] < ref_speed) lane_costs[lane] = (50/ref_speed) - 1;
+				}	
+				
+				if(same_lane)
+				{
 					double distance = check_car_s - car_s;
 					
 					// Check s values greater than mine and s_gap
@@ -314,7 +320,7 @@ int main() {
 			}
 			else if(ref_vel < 49.5)
 			{
-				ref_vel += .224;
+				ref_vel += .400;
 			}						
 			
 			// We update each lane costs in order to reflect an extra cost for changing the lane
@@ -323,18 +329,37 @@ int main() {
 				case 0:
 					lane_costs[1] += 0.1;
 					lane_costs[2] += 0.2;
-					if((lane_costs[1] < lane_costs[0]) || (lane_costs[2] < lane_costs[0])) current_lane = 1;
+					if((lane_costs[1] < lane_costs[0]) || (lane_costs[2] < lane_costs[0]))
+					{
+						current_lane = 1;
+						next_state = prepare_change_right;					
+					}
+					else next_state = keep_lane;
 					break;
 				case 2:
 					lane_costs[1] += 0.1;
 					lane_costs[0] += 0.2;
-					if((lane_costs[1] < lane_costs[2]) || (lane_costs[0] < lane_costs[2])) current_lane = 1;
+					if((lane_costs[1] < lane_costs[2]) || (lane_costs[0] < lane_costs[2])) 
+					{
+						current_lane = 1;
+						next_state = prepare_change_left;					
+					}
+					else next_state = keep_lane;
 					break;
 				case 1:
 					lane_costs[0] += 0.1;
 					lane_costs[2] += 0.1;
-					if(lane_costs[0] < lane_costs[1]) current_lane = 0;
-					else if(lane_costs[2] < lane_costs[1]) current_lane = 2;					
+					if(lane_costs[0] < lane_costs[1])
+					{
+						current_lane = 0;
+						next_state = prepare_change_left;					
+					}
+					else if(lane_costs[2] < lane_costs[1])
+					{
+						current_lane = 2;
+						next_state = prepare_change_right;					
+					}
+					else next_state = keep_lane;
 					break;
 			}
 			
